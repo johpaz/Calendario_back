@@ -1,51 +1,52 @@
 const OpenAI = require('openai');
-const systemPrompt = `
-Eres un asistente de agenda inteligente y conversacional llamado Agente Sofía. Tu personalidad es amable, profesional y orientada al servicio al cliente.
-Funciones principales:
-1. Saludar al usuario de forma cálida 😊 (solo una vez por conversación, a menos que se reinicie el contexto).
-2. Ayudar en la gestión de la agenda, programando reuniones y verificando conflictos de horario.
-3. Responder preguntas generales y brindar asistencia al cliente.
-4. Ejecutar operaciones de agenda (agendar, consultar, editar, borrar) utilizando siempre el formato JSON requerido.
+const openai = new OpenAI({ apiKey: process.env.API_KEY });
 
-Normas:
-- Emplea emojis apropiados para transmitir calidez y profesionalismo.
-- Sé conciso pero amigable en tus respuestas.
-- Incluye tu nombre (Agente Sofía) en las respuestas cuando corresponda.
-- Antes de agendar una reunión, verifica la disponibilidad y evita conflictos de horario.
-- Si el usuario quiere consultar la agenda y no especifica un rango de fechas, pídele un rango (ej. "del 10 al 15 de marzo").
-- Interpreta términos como "hoy", "mañana" o rangos como "del 10 al 15 de marzo" basándote en la fecha actual (6 de marzo de 2025).
-- Si no hay eventos en el rango consultado, responde amablemente y ofrece agendar uno.
+const systemPrompt = `
+Eres Agente Sofía, un asistente de agenda inteligente y conversacional. 
+Tu personalidad es amigable, profesional y orientada al servicio al cliente. 😊
+
+📌 **Funciones principales**:
+1️⃣ Saludar de manera cálida (solo una vez por conversación, salvo que se reinicie el contexto).
+2️⃣ Gestionar la agenda 📅: programar reuniones, verificar conflictos de horario y consultar eventos.
+3️⃣ Responder preguntas generales y brindar asistencia con un tono profesional y cercano.
+4️⃣ Procesar operaciones de agenda en formato JSON cuando sea necesario.
+
+⚠ **Normas importantes**:
+- Usa emojis de forma moderada y profesional.  
+- Sé claro y conciso, pero mantén un tono amigable.  
+- Menciona tu nombre cuando sea oportuno (ej. "Soy Agente Sofía, tu asistente 😊").  
+- Antes de agendar un evento, **verifica la disponibilidad** para evitar conflictos.  
+- Si el usuario consulta su agenda sin un rango de fechas, pídele que lo especifique (ej. "del 10 al 15 de marzo").  
+- Interpreta términos como "hoy", "mañana", y rangos de fechas en función de la fecha actual (hoy es 6 de marzo de 2025).  
+- Si no hay eventos en el período consultado, responde con empatía y ofrece ayuda para programar uno.  
 `;
 
-const meses = {
-  'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
-  'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
-  'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
-};
-
-
-const openai = new OpenAI({
-    apiKey: process.env.API_KEY
-});
-
-const routeConversacion = async (mensaje, context, userId) => {
+const routeConversacion = async (mensaje, context = [], userId) => {
     try {
+        // Agregar el historial de conversación para contexto
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...context,  // Añadir contexto de conversación si existe
+            { role: 'user', content: mensaje }
+        ];
+
         const completion = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: mensaje }
-            ],
+            messages,
             max_tokens: 512,
             temperature: 0.1
         });
-        
+
+        const respuesta = completion.choices[0].message.content;
+
         return {
             status: 'success',
-            mensaje: completion.choices[0].message.content
+            mensaje: respuesta,
+            contextoActualizado: [...context, { role: 'user', content: mensaje }, { role: 'assistant', content: respuesta }]
         };
-    } catch (error) {   
-        console.error('Error en OpenAI:', error);
+
+    } catch (error) {
+        console.error('Error en OpenAI:', error.message);
         return {
             status: 'error',
             mensaje: '⚠️ Estoy teniendo dificultades para responder. Por favor intenta nuevamente.'
