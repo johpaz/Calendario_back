@@ -3,12 +3,14 @@ const fs = require('fs');
 const path = require('path');
 
 // Asegurarse de que el directorio db exista
-const dbDir = path.join(__dirname, '../db');
+const dbDir = path.join(__dirname, './db');
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir);
 }
 
 const dbPath = path.join(dbDir, 'agenda.db');
+console.log(dbPath);
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error al abrir la base de datos:', err.message);
