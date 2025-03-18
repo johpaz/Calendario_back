@@ -1,5 +1,4 @@
 // Importaciones necesarias
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { OpenAI } = require('openai');
 const { universalController } = require('../controllers/controladorUniversa');
 
