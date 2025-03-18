@@ -23,8 +23,8 @@ const Evento = mongoose.model("Evento", eventoSchema);
   const count = await Evento.countDocuments();
   if (count === 0) {
     await Evento.insertMany([
-      { nombre: "Llamada con cliente", fecha: "2025-03-10", hora_inicio: "13:30", hora_fin: "14:30" },
-      { nombre: "Revisión de código", fecha: "2025-03-10", hora_inicio: "15:00", hora_fin: "16:00" }
+      { nombre: "Llamada con cliente", fecha: "2025-03-20", hora_inicio: "13:30", hora_fin: "14:30" },
+      { nombre: "Revisión de código", fecha: "2025-03-19", hora_inicio: "15:00", hora_fin: "16:00" }
     ]);
     console.log("📅 Eventos iniciales cargados en MongoDB.");
   }

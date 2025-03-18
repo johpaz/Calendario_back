@@ -54,6 +54,24 @@ function parseFecha(texto, baseDate = new Date()) {
 
   return null;
 }
+function parseFecha(texto, baseDate = new Date()) {
+  // Validar entrada
+  if (!texto || typeof texto !== 'string') return null;
+
+  texto = texto.toLowerCase().trim();
+
+  // Mantener el resto de la lógica igual...
+  // [El código existente aquí]
+}
+const procesarFecha = (fechaStr) => {
+  try {
+    if (!fechaStr) return new Date().toISOString().split('T')[0]; // Fecha actual por defecto
+    return formatDate(parseFecha(fechaStr));
+  } catch (e) {
+    console.error('Error procesando fecha:', e);
+    return null;
+  }
+};
 
 // Función para interpretar horas en formato "10:30 am"
 function parseHora(texto) {
@@ -78,4 +96,4 @@ function parseDuration(texto) {
   return match ? parseInt(match[1], 10) : 1;
 }
 
-module.exports = { removeAccents, formatDate, parseFecha, parseHora, parseDuration };
+module.exports = { removeAccents, formatDate, procesarFecha, parseFecha, parseHora, parseDuration };

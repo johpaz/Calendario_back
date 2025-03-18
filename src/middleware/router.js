@@ -1,8 +1,10 @@
 // Importaciones necesarias
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { OpenAI } = require('openai');
-const { universalController } = require('../controllers/controladorUniversa');
+const { universalController } = require('../controllers/controladorUniversa copy');
 
 // Configuración de las APIs
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
@@ -158,7 +160,7 @@ const manejarConversacionGeneral = async (mensaje, userId, saludo) => {
  */
 const formatearHistorialParaOpenAI = (userId) => {
     // Tomar solo los últimos mensajes para mantener el contexto sin exceder tokens
-    const historyLimit = 5;
+    const historyLimit = 10;
     const recentHistory = conversationContext[userId].history.slice(-historyLimit);
     
     return recentHistory;
