@@ -4,7 +4,6 @@ const { OpenAI } = require('openai');
 const { universalController } = require('../controllers/controladorUniversa');
 
 // Configuración de las APIs
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
