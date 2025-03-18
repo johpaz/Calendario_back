@@ -13,6 +13,10 @@ app.use(express.json());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Configura body-parser con un límite de 10 MB (ajusta según tus necesidades)
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ extended: true}));
+
 
 // Rutas
 app.use('/', index);
