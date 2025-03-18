@@ -11,7 +11,7 @@ function hayConflicto(fecha, horaInicio, horaFin, excludeId = null, callback) {
     params.push(excludeId);
   }
 
-  dataBase.all(query, params, (err, rows) => {
+  db.all(query, params, (err, rows) => {
     if (err) return callback(err);
     const conflicto = rows.some(evento => {
       const inicioExistente = new Date(`${evento.fecha}T${evento.hora_inicio}`);
@@ -168,7 +168,23 @@ function borrarEventoPorNombre(nombre, callback) {
   });
 }
 
+const buscarEventosPorFecha = async (fecha) => {
+  return new Promise((resolve, reject) => {
+    db.all(
+      'SELECT * FROM eventos WHERE fecha = ?',
+      [fecha],
+      (err, rows) => {
+        if (err) {
+          console.error('Error en buscarEventosPorFecha:', err);
+          return reject(err);
+        }
+        resolve(rows);
+      }
+    );
+  });
+};
+
 
 module.exports = { agendarEvento, consultarAgenda, editarEventoPorNombre, borrarEventoPorNombre,buscarEventosPorNombre,
-  borrarEvento,editarEvento
+  borrarEvento,editarEvento, buscarEventosPorFecha
 }

@@ -1,11 +1,7 @@
 // Importaciones necesarias
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { OpenAI } = require('openai');
-const { consultarHandler } = require('../controllers/consultarController');
-const { handleAgendar } = require('../controllers/agregarController');
-const { routeConversacion } = require('../controllers/conversacionController');
-const { handleEditar } = require('../controllers/editarController');
-const { handleBorrar } = require('../controllers/borrarController');
+const { universalController } = require('../controllers/controladorUniversa');
 
 // Configuración de las APIs
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -28,7 +24,11 @@ const routeInput = async (mensaje, userId = 'default') => {
             conversationContext[userId] = { 
                 greeted: false,
                 history: [],
-                pendingAction: null
+                pendingAction: null,
+                lastActionParams: {},
+                lastAction: null,
+                currentEventId: null,
+                eventOptions: []
             };
         }
 
@@ -38,42 +38,43 @@ const routeInput = async (mensaje, userId = 'default') => {
             content: mensaje
         });
         
-        // Manejo de acciones pendientes
-        if (conversationContext[userId].pendingAction) {
-            return handlePendingAction(mensaje, userId);
-        }
-
         // Obtener saludo si corresponde
         const saludo = manejarSaludo(userId);
         
-        // Detectar intención con Gemini
-        const intencionDetectada = await detectarIntencionConIA(mensaje, conversationContext[userId].history);
-        console.log(`Intención detectada: ${intencionDetectada.accion}`);
-
-        // Enrutar según la intención detectada
-        if (intencionDetectada.accion) {
-            conversationContext[userId].pendingAction = intencionDetectada.accion;
-            conversationContext[userId].lastActionParams = intencionDetectada.parametros;
-            
-            // Direccionar a los manejadores correspondientes con los parámetros extraídos
-            switch(intencionDetectada.accion) {
-                case 'consultar':
-                    return consultarHandler(mensaje, userId, conversationContext, saludo, intencionDetectada.parametros);
-                case 'agregar':
-                    return handleAgendar(mensaje, userId, conversationContext, saludo, intencionDetectada.parametros);
-                case 'editar':
-                    return handleEditar(mensaje, userId, conversationContext, saludo, intencionDetectada.parametros);
-                case 'borrar':
-                    return handleBorrar(mensaje, userId, conversationContext, saludo, intencionDetectada.parametros);
-                default:
+        try {
+            // Si hay una acción pendiente o se detecta una intención relacionada con la agenda
+            if (conversationContext[userId].pendingAction || detectarIntencionSimple(mensaje)) {
+                // Intentar procesar con el controlador universal
+                try {
+                    const respuesta = await universalController(mensaje, userId, conversationContext);
+                    
+                    // Si hay una respuesta válida, devolverla con el saludo adecuado
+                    if (respuesta && typeof respuesta === 'object') {
+                        return {
+                            ...respuesta,
+                            mensaje: saludo + (respuesta.mensaje || 'He procesado tu solicitud.')
+                        };
+                    } else {
+                        // Fallback si la respuesta no es válida
+                        console.warn('Respuesta no válida del controlador universal:', respuesta);
+                        return manejarConversacionGeneral(mensaje, userId, saludo);
+                    }
+                } catch (controllerError) {
+                    console.error('Error al procesar con universalController:', controllerError);
+                    
+                    // Si falla el controlador universal, intentar con la conversación general
                     return manejarConversacionGeneral(mensaje, userId, saludo);
+                }
+            } else {
+                // Si no se detecta intención relacionada con la agenda, usar la conversación general
+                return manejarConversacionGeneral(mensaje, userId, saludo);
             }
-        } else {
-            // Si no se detecta una intención específica, derivar a conversación general
+        } catch (processingError) {
+            console.error('Error al procesar el mensaje:', processingError);
             return manejarConversacionGeneral(mensaje, userId, saludo);
         }
     } catch (err) {
-        console.error('Error en routeInput:', err);
+        console.error('Error general en routeInput:', err);
         return { 
             status: 'error', 
             mensaje: '⚠️ Error temporal en el sistema. Por favor intenta nuevamente.' 
@@ -82,125 +83,24 @@ const routeInput = async (mensaje, userId = 'default') => {
 };
 
 /**
- * Maneja las acciones pendientes según el contexto actual
- */
-const handlePendingAction = async (mensaje, userId) => {
-    const pendingAction = conversationContext[userId].pendingAction;
-    
-    switch(pendingAction) {
-        case 'consultar':
-            return consultarHandler(mensaje, userId, conversationContext);
-        case 'agregar':
-            return handleAgendar(mensaje, userId, conversationContext);
-        case 'editar':
-            return handleEditar(mensaje, userId, conversationContext);
-        case 'borrar':
-            return handleBorrar(mensaje, userId, conversationContext);
-        default:
-            // Limpiar acción pendiente si no coincide con ninguna conocida
-            conversationContext[userId].pendingAction = null;
-            return manejarConversacionGeneral(mensaje, userId, '');
-    }
-};
-
-/**
- * Detecta la intención usando Gemini 1.5
- * @returns {Object} - Objeto con la acción detectada y parámetros extraídos
- */
-const detectarIntencionConIA = async (mensaje, historial) => {
-    // Preparar el prompt para Gemini
-    const prompt = `
-    Eres un agente de agenda inteligente que detecta intenciones en mensajes de usuarios.
-    Tu tarea es analizar el siguiente mensaje y determinar si contiene una intención de:
-    1. consultar: ver, mostrar o buscar eventos o citas en la agenda
-    2. agregar: crear, añadir o agendar un nuevo evento o cita
-    3. editar: modificar o actualizar un evento o cita existente
-    4. borrar: eliminar o cancelar un evento o cita
-    5. ninguna: el mensaje no corresponde a ninguna de las intenciones anteriores
-    
-    Además, extrae los siguientes parámetros si están presentes:
-    - fecha: fecha del evento (día, semana, mes, etc.)
-    - hora: hora del evento
-    - titulo: título o descripción del evento
-    - id: identificador del evento (si se menciona)
-    
-    Responde en formato JSON como:
-    {
-      "accion": "consultar|agregar|editar|borrar|ninguna",
-      "parametros": {
-        "fecha": "valor o null",
-        "hora": "valor o null",
-        "titulo": "valor o null",
-        "id": "valor o null"
-      }
-    }
-    
-    Mensaje: ${mensaje}
-    `;
-    
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-        const result = await model.generateContent(prompt);
-        const response = result.response.text();
-        
-        // Intentar parsear la respuesta como JSON
-        try {
-            const jsonResponse = JSON.parse(response);
-            return jsonResponse;
-        } catch (parseError) {
-            console.error('Error al parsear respuesta de Gemini:', parseError);
-            // Extraer JSON de la respuesta si no está en formato puro
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
-            }
-            // Fallback a detección simple si no se puede parsear
-            return { 
-                accion: detectarIntencionSimple(mensaje),
-                parametros: {}
-            };
-        }
-    } catch (error) {
-        console.error('Error al consultar Gemini:', error);
-        // Fallback a detección simple
-        return { 
-            accion: detectarIntencionSimple(mensaje),
-            parametros: {}
-        };
-    }
-};
-
-/**
- * Método de fallback para detección de intenciones basado en palabras clave
+ * Método mejorado para detección de intenciones basado en palabras clave
  */
 const detectarIntencionSimple = (texto) => {
+    if (!texto) return false;
+    
     const textoNormalizado = texto.toLowerCase().trim();
     
-    const intenciones = {
-        'consultar': [
-            'consultar', 'ver', 'revisar', 'mostrar', 'listar',
-            'qué tengo', 'qué hay', 'cuáles son', 'buscar'
-        ],
-        'agregar': [
-            'agrega', 'añadir', 'crear', 'nuevo', 'programar', 'agendar',
-            'planear', 'establecer', 'fijar', 'registrar'
-        ],
-        'editar': [
-            'editar', 'modificar', 'cambiar', 'actualizar',
-            'ajustar', 'corregir', 'actualiza', 'reescribir'
-        ],
-        'borrar': [
-            'borrar', 'eliminar', 'quitar', 'suprimir',
-            'cancelar', 'descartar', 'remover', 'borra'
-        ]
-    };
+    // Palabras clave para detectar intenciones relacionadas con la agenda
+    const palabrasClaveAgenda = [
+        'consultar', 'ver', 'revisar', 'mostrar', 'listar', 'buscar',
+        'agrega', 'añadir', 'crear', 'nuevo', 'programar', 'agendar',
+        'editar', 'modificar', 'cambiar', 'actualizar', 'ajustar',
+        'borrar', 'eliminar', 'quitar', 'suprimir', 'cancelar',
+        'cita', 'evento', 'reunión', 'agenda', 'calendario',
+        'planear', 'recordatorio', 'recordar', 'organizar'
+    ];
 
-    for (const [accion, sinónimos] of Object.entries(intenciones)) {
-        if (sinónimos.some(palabra => textoNormalizado.includes(palabra))) {
-            return accion;
-        }
-    }
-    return null;
+    return palabrasClaveAgenda.some(palabra => textoNormalizado.includes(palabra));
 };
 
 /**
