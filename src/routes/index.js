@@ -1,5 +1,5 @@
 const {Router}= require('express');
-
+const db = require('../../database');
 const {chatRoutes,transcribeAudioRoutes} = require('./chatRoutes');
 
 router = Router();  
