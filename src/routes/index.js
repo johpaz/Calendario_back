@@ -7,9 +7,6 @@ router = Router();
 router.use('/chat', chatRoutes);
 router.use('/transcribe', transcribeAudioRoutes);   
 
-const express = require("express");
-
-
 
 // Función que obtiene todos los eventos de la base de datos
 const obtenerEventos = async () => {
