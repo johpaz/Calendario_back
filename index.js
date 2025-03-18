@@ -5,13 +5,10 @@ const index = require('./src/routes/index');
 const bodyParser = require("body-parser");
 
 const app = express();
-app.options('*', cors());
-
-app.use(express.json());
-
 
 
 // Configuración general
+app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
