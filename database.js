@@ -1,48 +1,33 @@
-const sqlite3 = require('sqlite3').verbose();
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose');
 
-// Asegurarse de que el directorio db exista
-const dbDir = path.join(__dirname, './db');
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir);
-}
+const MONGO_URI = process.env.MONGO_URL_ONLINE 
 
-const dbPath = path.join(dbDir, 'agenda.db');
-console.log(dbPath);
+// Conectar a MongoDB sin opciones innecesarias
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("✅ Conectado a MongoDB"))
+  .catch(err => console.error("❌ Error al conectar a MongoDB:", err));
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error al abrir la base de datos:', err.message);
-  } else {
-    console.log('Conexión a la base de datos establecida.');
+// Definir el esquema de eventos
+const eventoSchema = new mongoose.Schema({
+  nombre: { type: String, required: true },
+  fecha: { type: String, required: true },
+  hora_inicio: { type: String, required: true },
+  hora_fin: { type: String, required: true }
+});
+
+// Crear el modelo "Evento"
+const Evento = mongoose.model("Evento", eventoSchema);
+
+// Insertar eventos iniciales si la colección está vacía
+(async () => {
+  const count = await Evento.countDocuments();
+  if (count === 0) {
+    await Evento.insertMany([
+      { nombre: "Llamada con cliente", fecha: "2025-03-10", hora_inicio: "13:30", hora_fin: "14:30" },
+      { nombre: "Revisión de código", fecha: "2025-03-10", hora_inicio: "15:00", hora_fin: "16:00" }
+    ]);
+    console.log("📅 Eventos iniciales cargados en MongoDB.");
   }
-});
+})();
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS eventos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nombre TEXT NOT NULL,
-      fecha TEXT NOT NULL,
-      hora_inicio TEXT NOT NULL,
-      hora_fin TEXT NOT NULL
-    )
-  `);
-
-  db.get('SELECT COUNT(*) as count FROM eventos', (err, row) => {
-    if (err) {
-      console.error('Error al verificar la tabla:', err.message);
-      return;
-    }
-    if (row.count === 0) {
-      const stmt = db.prepare('INSERT INTO eventos (nombre, fecha, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)');
-      stmt.run('Llamada con cliente', '2025-03-10', '13:30', '14:30');
-      stmt.run('Revisión de código', '2025-03-10', '15:00', '16:00');
-      stmt.finalize();
-      console.log('Agenda inicial cargada.');
-    }
-  });
-});
-
-module.exports = db;
+module.exports = Evento;
