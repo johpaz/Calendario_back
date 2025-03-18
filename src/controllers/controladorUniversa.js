@@ -1,6 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const db = require('../../database');
-const calendarFuncs = require('../services/agenda'); // Ajustar ruta según tu estructura
+const calendarFuncs = require('../services/agenda'); // Asegúrate de que exporta las funciones asíncronas
 
 // Configuración de la API de Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -14,9 +13,9 @@ const procesarFecha = (fechaStr) => {
       return hoy.toISOString().split('T')[0];
     }
     if (fechaStr.toLowerCase().includes('mañana')) {
-      const mañana = new Date(hoy);
-      mañana.setDate(hoy.getDate() + 1);
-      return mañana.toISOString().split('T')[0];
+      const manana = new Date(hoy);
+      manana.setDate(hoy.getDate() + 1);
+      return manana.toISOString().split('T')[0];
     }
     if (/\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(fechaStr)) {
       const partes = fechaStr.split(/[\/\-\.]/);
@@ -58,6 +57,23 @@ const procesarHora = (horaStr) => {
 };
 
 /**
+ * Función auxiliar para agregar duración (en minutos) a una hora
+ */
+const agregarDuracion = (hora, minutos) => {
+  try {
+    const [h, m] = hora.split(':').map(Number);
+    let nuevosMinutos = m + minutos;
+    let nuevasHoras = h + Math.floor(nuevosMinutos / 60);
+    nuevosMinutos %= 60;
+    nuevasHoras %= 24;
+    return `${nuevasHoras.toString().padStart(2, '0')}:${nuevosMinutos.toString().padStart(2, '0')}`;
+  } catch (e) {
+    console.error('Error al calcular hora fin:', e);
+    return null;
+  }
+};
+
+/**
  * Controlador universal que maneja todas las operaciones de calendario
  */
 const universalController = async (mensaje, userId, conversationContext) => {
@@ -84,7 +100,7 @@ const universalController = async (mensaje, userId, conversationContext) => {
         if (!parametros.fecha) {
           return solicitarInformacionFaltante(accion, parametros, userId, conversationContext);
         }
-        // Si el usuario menciona "hoy" o "mañana", se usará esa fecha para inicio y fin
+        // Si se menciona "hoy" o "mañana", se usará esa fecha para inicio y fin
         resultado = await ejecutarConsulta(fecha, parametros.fechaFin);
         break;
         
@@ -95,55 +111,52 @@ const universalController = async (mensaje, userId, conversationContext) => {
         resultado = await ejecutarAgendamiento(titulo, fecha, horaInicio, horaFin);
         break;
 
-        case 'editar':
-          // Intentamos obtener el ID desde el mensaje o del contexto
-          if (!id) {
-            if (conversationContext[userId] && conversationContext[userId].currentEventId) {
-              // Si el contexto ya tiene un evento seleccionado, se usa ese ID
-              id = conversationContext[userId].currentEventId;
-            } else if (titulo) {
-              // Si se proporcionó un título, se busca por nombre (o combinación de criterios)
-              const eventosEncontrados = await buscarEventos(parametros);
-              if (eventosEncontrados && eventosEncontrados.length === 1) {
-                id = eventosEncontrados[0].id;
-                conversationContext[userId].currentEventId = id;
-              } else if (eventosEncontrados && eventosEncontrados.length > 1) {
-                return manejarResultadosBusqueda(eventosEncontrados, 'editar', parametros, userId, conversationContext);
-              } else {
-                return {
-                  status: 'error',
-                  mensaje: 'No se encontró el evento que deseas editar. Por favor, proporciona más detalles.'
-                };
-              }
-            } else if (fecha) {
-              // Si no hay título pero se indica una fecha (por ejemplo "hoy"), se busca por fecha
-              const eventosEncontrados = await calendarFuncs.buscarEventosPorFecha(fecha);
-              if (eventosEncontrados && eventosEncontrados.length === 1) {
-                id = eventosEncontrados[0].id;
-                conversationContext[userId].currentEventId = id;
-              } else if (eventosEncontrados && eventosEncontrados.length > 1) {
-                return manejarResultadosBusqueda(eventosEncontrados, 'editar', parametros, userId, conversationContext);
-              } else {
-                return {
-                  status: 'error',
-                  mensaje: 'No se encontró ningún evento en esa fecha para editar. Por favor, proporciona más detalles.'
-                };
-              }
+      case 'editar':
+        // Intentamos obtener el ID desde el mensaje o del contexto
+        if (!id) {
+          if (conversationContext[userId] && conversationContext[userId].currentEventId) {
+            id = conversationContext[userId].currentEventId;
+          } else if (titulo) {
+            const eventosEncontrados = await buscarEventos(parametros);
+            if (eventosEncontrados && eventosEncontrados.length === 1) {
+              id = eventosEncontrados[0].id;
+              conversationContext[userId].currentEventId = id;
+            } else if (eventosEncontrados && eventosEncontrados.length > 1) {
+              return manejarResultadosBusqueda(eventosEncontrados, 'editar', parametros, userId, conversationContext);
             } else {
               return {
                 status: 'error',
-                mensaje: 'No se proporcionó suficiente información para identificar el evento a editar.'
+                mensaje: 'No se encontró el evento que deseas editar. Por favor, proporciona más detalles.'
               };
             }
+          } else if (fecha) {
+            const eventosEncontrados = await calendarFuncs.buscarEventosPorFecha(fecha);
+            if (eventosEncontrados && eventosEncontrados.length === 1) {
+              id = eventosEncontrados[0].id;
+              conversationContext[userId].currentEventId = id;
+            } else if (eventosEncontrados && eventosEncontrados.length > 1) {
+              return manejarResultadosBusqueda(eventosEncontrados, 'editar', parametros, userId, conversationContext);
+            } else {
+              return {
+                status: 'error',
+                mensaje: 'No se encontró ningún evento en esa fecha para editar. Por favor, proporciona más detalles.'
+              };
+            }
+          } else {
+            return {
+              status: 'error',
+              mensaje: 'No se proporcionó suficiente información para identificar el evento a editar.'
+            };
           }
-          
-          // Verificamos si se han proporcionado nuevos datos para la edición
-          if (!parametros.nuevoTitulo && !fecha && !horaInicio && !horaFin) {
-            return solicitarInformacionFaltante(accion, parametros, userId, conversationContext);
-          }
-          
-          resultado = await ejecutarEdicion(id, titulo, fecha, horaInicio, horaFin, parametros.nuevoTitulo, conversationContext, userId);
-          break;
+        }
+        
+        // Verificamos si se han proporcionado nuevos datos para la edición
+        if (!parametros.nuevoTitulo && !fecha && !horaInicio && !horaFin) {
+          return solicitarInformacionFaltante(accion, parametros, userId, conversationContext);
+        }
+        
+        resultado = await ejecutarEdicion(id, titulo, fecha, horaInicio, horaFin, parametros.nuevoTitulo);
+        break;
         
       case 'borrar':
         if (!titulo && !id) {
@@ -185,16 +198,16 @@ const analizarMensajeConGemini = async (mensaje, historial) => {
   
   const prompt = `
   Eres un asistente de agenda que analiza mensajes para extraer intenciones y parámetros.
-
+  
   CONTEXTO DE FUNCIONES DISPONIBLES:
   - agendarEvento(nombre, fecha, horaInicio, horaFin)
   - consultarAgenda(fechaInicio, fechaFin)
   - editarEvento(id, nuevoNombre, fecha, horaInicio, horaFin)
   - borrarEvento(idEvento)
-  - buscarEvento)(parametros)
+  - buscarEventos(parametros)
   - buscarEventosPorNombre(nombre)
   - buscarEventosPorFecha(fecha)
-
+  
   EJEMPLOS SQL:
   1. hayConflicto(fecha, horaInicio, horaFin, excludeId): Verifica si existe conflicto en el horario.
   2. agendarEvento(nombre, fecha, horaInicio, horaFin): Agenda un nuevo evento y retorna un objeto con status, mensaje y datos del evento.
@@ -203,18 +216,17 @@ const analizarMensajeConGemini = async (mensaje, historial) => {
   5. borrarEventoPorNombre(nombre): Borra un evento buscado por nombre.
   6. buscarEventosPorNombre(nombre): Realiza una búsqueda parcial de eventos cuyo nombre contenga la cadena proporcionada y retorna una lista de coincidencias.
   7. buscarEventosPorFecha(fecha). Si se especifica "hoy" o "mañana", se debe interpretar como la fecha actual o la siguiente, respectivamente.
-  8. buscarEventos(parametros) Puede buscar eventos por nombre o fecha se debe interpretar como la fecha actual(hoy) o la siguiente(mañana), respectivamente..
- 
- 
+  8. buscarEventos(parametros): Puede buscar eventos por nombre o fecha.
+  
   DATOS REQUERIDOS SEGÚN LA INTENCIÓN:
-  - Para agregar (crear) un evento: Se requiere el título, la fecha, la hora de inicio y la hora de fin.
-  - Para consultar eventos: Se requiere la fecha de inicio. Si se ingresa "hoy" o "mañana", se usará esa fecha como inicio y fin.
-  - Para editar un evento: Se requiere el identificador (ID) que puede tomar del contexto cuando da el nombre del evento, si no tiene contexto ejecuta la funcion buscarEventos(puede buscar por nombre o por fecha), Si se ingresa una fecha como "hoy" o "mañana", se usará esa fecha actual, y luego debe pedirle el dato que va a cambiar. por ejemplo  los nuevos datos (nuevo título, fecha, hora de inicio y hora de fin).
-  - Para borrar un evento: Se requiere el identificador (ID) o el nombre del evento.
+  - Para agregar: título, fecha, hora de inicio y hora de fin.
+  - Para consultar: fecha de inicio (y opcional fecha final).
+  - Para editar: identificador (ID) o nombre y los nuevos datos.
+  - Para borrar: identificador (ID) o nombre.
   
   Analiza el siguiente mensaje y extrae la intención y los parámetros relevantes.
   
-  FORMATO DE RESPUESTA (RESPONDE SOLO EN FORMATO JSON, SIN BLOQUES DE CÓDIGO):
+  FORMATO DE RESPUESTA (SOLO JSON, sin bloques de código):
   {
     "accion": "consultar|agregar|editar|borrar",
     "parametros": {
@@ -231,7 +243,7 @@ const analizarMensajeConGemini = async (mensaje, historial) => {
   
   MENSAJE: ${mensaje}
   
-  HISTORIAL RECIENTE (si es relevante):
+  HISTORIAL RECIENTE:
   ${historial.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
   `;
   
@@ -267,119 +279,67 @@ const analizarMensajeConGemini = async (mensaje, historial) => {
   }
 };
 
-
-// Función para ejecutar consulta
-const ejecutarConsulta = (fechaInicio, fechaFin) => {
-  return new Promise((resolve, reject) => {
-    let fechaInicioReal = fechaInicio;
-    let fechaFinReal = fechaFin || fechaInicio; // Si falta fecha final, se usa la misma fecha
-    if (!fechaInicioReal) {
-      const hoy = new Date().toISOString().split('T')[0];
-      fechaInicioReal = hoy;
-      fechaFinReal = hoy;
-    }
-    try {
-      if (typeof calendarFuncs === 'undefined' || !calendarFuncs.consultarAgenda) {
-        console.error('Error: calendarFuncs no está disponible o no tiene el método consultarAgenda');
-        return resolve({
-          status: 'success',
-          eventos: [],
-          mensaje: 'No se pudieron cargar los eventos. La funcionalidad de calendario no está disponible.'
-        });
-      }
-      calendarFuncs.consultarAgenda(fechaInicioReal, fechaFinReal, (err, resultado) => {
-        if (err) {
-          console.error('Error al consultar agenda:', err);
-          return reject(err);
-        }
-        resolve(resultado || { status: 'success', eventos: [] });
-      });
-    } catch (error) {
-      console.error('Error al ejecutar consulta:', error);
-      resolve({
+/**
+ * Función para ejecutar consulta (usando async/await)
+ */
+const ejecutarConsulta = async (fechaInicio, fechaFin) => {
+  let fechaInicioReal = fechaInicio;
+  let fechaFinReal = fechaFin || fechaInicio; // Si falta fecha final, se usa la misma fecha
+  if (!fechaInicioReal) {
+    const hoy = new Date().toISOString().split('T')[0];
+    fechaInicioReal = hoy;
+    fechaFinReal = hoy;
+  }
+  try {
+    if (!calendarFuncs || !calendarFuncs.consultarAgenda) {
+      console.error('Error: calendarFuncs no está disponible o no tiene el método consultarAgenda');
+      return {
         status: 'success',
         eventos: [],
-        mensaje: 'Ocurrió un error al consultar los eventos.'
-      });
+        mensaje: 'No se pudieron cargar los eventos. La funcionalidad de calendario no está disponible.'
+      };
     }
-  });
-};
-
-/**
- * Métodos de fallback para detección básica
- */
-const detectarAccionBasica = (texto) => {
-  const textoNormalizado = texto.toLowerCase();
-  if (/consulta|ver|muestra|lista/.test(textoNormalizado)) return 'consultar';
-  if (/agrega|añade|crea|nuevo|agenda/.test(textoNormalizado)) return 'agregar';
-  if (/edita|modifica|cambia|actualiza/.test(textoNormalizado)) return 'editar';
-  if (/borra|elimina|cancela|quita/.test(textoNormalizado)) return 'borrar';
-  return null;
-};
-
-const extractParametrosBasicos = (texto) => {
-  const params = { titulo: null, fecha: null, horaInicio: null, horaFin: null, id: null };
-  const fechaMatch = texto.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})|(\d{1,2}-\d{1,2}-\d{2,4})/);
-  if (fechaMatch) params.fecha = fechaMatch[0];
-  const horaMatch = texto.match(/(\d{1,2}:\d{2})|(\d{1,2} ?(?:am|pm))/i);
-  if (horaMatch) params.horaInicio = horaMatch[0];
-  const tituloMatch = texto.match(/"([^"]+)"|'([^']+)'|llamad[oa] ([^,\.]+)|titulad[oa] ([^,\.]+)|nombrad[oa] ([^,\.]+)/);
-  if (tituloMatch) {
-    for (let i = 1; i < tituloMatch.length; i++) {
-      if (tituloMatch[i]) {
-        params.titulo = tituloMatch[i].trim();
-        break;
-      }
-    }
+    const resultado = await calendarFuncs.consultarAgenda(fechaInicioReal, fechaFinReal);
+    return resultado || { status: 'success', eventos: [] };
+  } catch (error) {
+    console.error('Error al ejecutar consulta:', error);
+    return {
+      status: 'success',
+      eventos: [],
+      mensaje: 'Ocurrió un error al consultar los eventos.'
+    };
   }
-  return params;
 };
 
 /**
- * Funciones para ejecutar las acciones en la base de datos
+ * Función para ejecutar el agendamiento de un evento
  */
-const ejecutarAgendamiento = (nombre, fecha, horaInicio, horaFin) => {
-  return new Promise((resolve, reject) => {
-    calendarFuncs.agendarEvento(nombre, fecha, horaInicio, horaFin, (err, resultado) => {
-      if (err) return reject(err);
-      resolve(resultado);
-    });
-  });
+const ejecutarAgendamiento = async (nombre, fecha, horaInicio, horaFin) => {
+  return await calendarFuncs.agendarEvento(nombre, fecha, horaInicio, horaFin);
 };
 
-const ejecutarEdicion = async (id, nombreActual, fecha, horaInicio, horaFin, nuevoNombre) => {
+/**
+ * Función para ejecutar la edición de un evento
+ */
+const ejecutarEdicion = async (id, nombreActual, fecha, horaInicio, horaFin, nuevoTitulo) => {
   if (id) {
-    return await calendarFuncs.editarEvento(id, nuevoNombre || nombreActual, fecha, horaInicio, horaFin);
+    return await calendarFuncs.editarEvento(id, nuevoTitulo || nombreActual, fecha, horaInicio, horaFin);
   }
-  return new Promise((resolve, reject) => {
-    calendarFuncs.editarEventoPorNombre(
-      nombreActual, 
-      nuevoNombre || nombreActual, 
-      fecha, 
-      horaInicio, 
-      horaFin, 
-      (err, resultado) => {
-        if (err) return reject(err);
-        resolve(resultado);
-      }
-    );
-  });
+  return await calendarFuncs.editarEventoPorNombre(nombreActual, nuevoTitulo || nombreActual, fecha, horaInicio, horaFin);
 };
 
+/**
+ * Función para ejecutar el borrado de un evento
+ */
 const ejecutarBorrado = async (id, nombre) => {
   if (id) {
     return await calendarFuncs.borrarEvento(id);
   }
-  return new Promise((resolve, reject) => {
-    calendarFuncs.borrarEventoPorNombre(nombre, (err, resultado) => {
-      if (err) return reject(err);
-      resolve(resultado);
-    });
-  });
+  return await calendarFuncs.borrarEventoPorNombre(nombre);
 };
 
 /**
- * Busca eventos por criterios parciales
+ * Función para buscar eventos por criterios parciales
  */
 const buscarEventos = async (parametros) => {
   const { titulo, fecha } = parametros;
@@ -396,12 +356,7 @@ const buscarEventos = async (parametros) => {
     }
   }
   if (fecha) {
-    return new Promise((resolve, reject) => {
-      calendarFuncs.consultarAgenda(fecha, fecha, (err, resultado) => {
-        if (err) return reject(err);
-        resolve(resultado.eventos || []);
-      });
-    });
+    return await calendarFuncs.buscarEventosPorFecha(fecha);
   }
   return [];
 };
@@ -479,7 +434,6 @@ const solicitarInformacionFaltante = (accion, parametros, userId, conversationCo
       pendingAction = 'espera_hora';
     }
   } else if (accion === 'editar') {
-    // Aquí se asume que ya se recibió el identificador (por ejemplo, en "titulo")
     mensajeSolicitud = `Para editar el evento "${parametros.titulo}", por favor proporciona los nuevos datos que deseas actualizar. Por ejemplo: nuevo título (si aplica), nueva fecha (YYYY-MM-DD), nueva hora de inicio (HH:MM) y nueva hora de fin (HH:MM).`;
     pendingAction = 'espera_nuevos_datos_editar';
   } else if (accion === 'borrar') {
@@ -497,7 +451,6 @@ const solicitarInformacionFaltante = (accion, parametros, userId, conversationCo
     pendingAction
   };
 };
-
 
 /**
  * Genera una respuesta en lenguaje natural basada en el resultado
@@ -557,23 +510,6 @@ const actualizarHistorial = (userId, conversationContext, role, content) => {
   conversationContext[userId].history.push({ role, content });
   if (conversationContext[userId].history.length > 10) {
     conversationContext[userId].history = conversationContext[userId].history.slice(-10);
-  }
-};
-
-/**
- * Función auxiliar para agregar duración a una hora
- */
-const agregarDuracion = (hora, minutos) => {
-  try {
-    const [h, m] = hora.split(':').map(Number);
-    let nuevosMinutos = m + minutos;
-    let nuevasHoras = h + Math.floor(nuevosMinutos / 60);
-    nuevosMinutos %= 60;
-    nuevasHoras %= 24;
-    return `${nuevasHoras.toString().padStart(2, '0')}:${nuevosMinutos.toString().padStart(2, '0')}`;
-  } catch (e) {
-    console.error('Error al calcular hora fin:', e);
-    return null;
   }
 };
 
