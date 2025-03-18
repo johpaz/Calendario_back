@@ -1,5 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const db = require('../database');
+const db = require('../../database');
 const calendarFuncs = require('../services/agenda'); // Ajustar ruta según tu estructura
 
 // Configuración de la API de Gemini

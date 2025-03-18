@@ -1,4 +1,4 @@
-const db = require('../database');
+const db = require('../../database');
 
 function hayConflicto(fecha, horaInicio, horaFin, excludeId = null, callback) {
   const inicioNuevo = new Date(`${fecha}T${horaInicio}`);
