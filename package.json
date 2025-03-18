@@ -4,7 +4,7 @@
   "description": "Asistente inteligente para controlar la agenda",
   "main": "agenda.js",
   "engines": {
-    "node": ">=20.18.3"
+    "node": ">=22"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
