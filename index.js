@@ -5,7 +5,8 @@ const index = require('./src/routes/index');
 const bodyParser = require("body-parser");
 
 const app = express();
-app.use(cors());
+app.options('*', cors());
+
 app.use(express.json());
 
 
