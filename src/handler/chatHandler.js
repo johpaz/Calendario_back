@@ -1,11 +1,12 @@
-const fs = require('fs');
-const ffmpeg = require('fluent-ffmpeg');
 const OpenAI = require('openai');
 const openai = new OpenAI({ apiKey: process.env.API_KEY });
 const os = require('os');
 const path = require('path');
-const { routeInput } = require('../middleware/router');
-// Configurar multer para guardar archivos temporalmente en la carpeta "uploads/"
+const fs = require('fs');
+const ffmpegPath = require('ffmpeg-static');
+const ffmpeg = require('fluent-ffmpeg');
+ffmpeg.setFfmpegPath(ffmpegPath);
+
 
 
 const chatHandler = async (req, res) => {
