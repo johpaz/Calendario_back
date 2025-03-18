@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "Asistente inteligente para controlar la agenda",
   "main": "agenda.js",
+  "engines": {
+    "node": "=20.0.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "vercel-build": "echo hello",
     "start": "nodemon index.js"
   },
   "author": "",
