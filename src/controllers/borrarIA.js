@@ -67,30 +67,32 @@ const handleBorrar = async (parametros, userId, conversationContext) => {
     console.log("Parámetros recibidos:", parametros);
 
     // Paso 0: Si ya estamos en estado "confirmar_borrado", procesar la respuesta.
-    if (conversationContext[userId].pendingAction === "confirmar_borrado") {
-      let confirmacion = (parametros.originalText || parametros.message || parametros.mensaje || "").toLowerCase().trim();
-      // Fallback: usar el último mensaje del historial si no se recibió confirmación.
-      if (!confirmacion && conversationContext[userId].history && conversationContext[userId].history.length > 0) {
-        confirmacion = conversationContext[userId].history[conversationContext[userId].history.length - 1].content.toLowerCase().trim();
-      }
-      console.log(`Usuario ${userId} - Confirmación recibida: "${confirmacion}"`);
-      if (confirmacion === "sí" || confirmacion === "si") {
-        const eventId = conversationContext[userId].eventoAEliminar;
-        if (!eventId) {
-          return { status: "error", mensaje: "No se encontró el evento a borrar." };
-        }
-        const resultado = await calendarFuncs.borrarEvento(eventId);
-        conversationContext[userId].pendingAction = null;
-        conversationContext[userId].eventoAEliminar = null;
-        console.log(`Usuario ${userId} - Evento borrado tras confirmación:`, resultado);
-        return { ...resultado };
-      } else {
-        conversationContext[userId].pendingAction = null;
-        conversationContext[userId].eventoAEliminar = null;
-        console.log(`Usuario ${userId} - Borrado cancelado por el usuario.`);
-        return { status: "info", mensaje: "Borrado cancelado." };
-      }
-    }
+  // Si el usuario está seleccionando un evento para borrar
+if (conversationContext[userId].pendingAction === "seleccionar_evento_para_borrar") {
+  let seleccion = parseInt(parametros.originalText || parametros.message || parametros.mensaje || "", 10);
+  
+  if (!isNaN(seleccion) && seleccion > 0 && seleccion <= conversationContext[userId].eventOptions.length) {
+      // Se seleccionó un número válido
+      const eventoSeleccionado = conversationContext[userId].eventOptions[seleccion - 1];
+      conversationContext[userId].eventoAEliminar = eventoSeleccionado._id;
+      conversationContext[userId].pendingAction = "confirmar_borrado";
+
+      return {
+          status: "info",
+          mensaje: `Has seleccionado el evento "${eventoSeleccionado.nombre}" (${eventoSeleccionado.fecha} ${eventoSeleccionado.hora_inicio}-${eventoSeleccionado.hora_fin}). ¿Estás seguro de que deseas borrarlo? Responde "sí" para confirmar o "no" para cancelar.`,
+          pendingAction: "confirmar_borrado",
+          eventos: [eventoSeleccionado]
+      };
+  } else {
+      return {
+          status: "error",
+          mensaje: "Por favor, selecciona un número válido de la lista de eventos.",
+          pendingAction: "seleccionar_evento_para_borrar",
+          eventos: conversationContext[userId].eventOptions
+      };
+  }
+}
+
 
     // Paso 1: Si no se recibió ni ID ni nombre, solicitar el nombre del evento.
     if (!parametros.id && !parametros.nombre) {

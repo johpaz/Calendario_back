@@ -52,8 +52,8 @@ Formato de respuesta (SOLO JSON):
     "fecha": "fecha del evento o null",
     "horaInicio": "hora de inicio o null",
     "horaFin": "hora de fin o null",
-    "id": "id del evento si se menciona o null",
-    "nuevoTitulo": "nuevo nombre (en caso de edición) o null"
+    "_id": "id del evento si se menciona o null",
+   
   },
   "explicacion": "Breve explicación de tu análisis"
 }
