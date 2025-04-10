@@ -1,8 +1,8 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { handleConsulta } = require('../controllers/consultasIA');
-const { handleAgregar } = require('../controllers/agendarIA');
-const { handleEditar } = require('../controllers/editarIA');
-const { handleBorrar } = require('../controllers/borrarIA');
+const { handleConsulta } = require('./consultasIA');
+const { handleAgregar } = require('./agendarIA');
+const { handleEditar } = require('./editarIA');
+const { handleBorrar } = require('./borrarIA');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 

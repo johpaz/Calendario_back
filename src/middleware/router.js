@@ -1,7 +1,7 @@
 // Importaciones necesarias
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { OpenAI } = require('openai');
-const { universalController } = require('../controllers/controladorUniversa copy');
+const { universalController } = require('../controllers/controladorUniversalIA');
 
 // Configuración de las APIs
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
